@@ -1,60 +1,18 @@
-import json
-import psycopg2
 import pandas as pd
+import api
 from tqdm import tqdm
 from random import randint
-from urllib.request import urlopen
 from danlp.models import load_bert_base_model
 from htmlstripper import strip_tags
-from database import connect
-from config import config
+import database
 
 model = load_bert_base_model()
-conn = connect()
-cur = conn.cursor()
-
-def call_api():
-    """ Get article data from api endpoint """
-
-    # Get url from config file
-    param = config("api.ini", "articles")
-    url = param['url']
-
-    # Connect to API end point
-    print("Fetching data from API endpoint...")
-    response = urlopen(url)
-
-    return json.loads(response.read())
-
-def call_file():
-    """ Get article data from file """
-
-    # Open and read the data from file
-    print("Fetching data from file...")
-    with open('./articles.json') as f:
-        return json.loads(f.read())
-
-def get_reach_score(article_uuid):
-    """ Get reach score for article """
-
-    try:
-        # Fetch from database
-        cur.execute("SELECT reach_score FROM rolling_30_days_news WHERE article_uuid = '" + article_uuid + "'")
-        row = cur.fetchone()
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-
-    if row is not None:
-        return row[0]
-    else:
-        # Return random score if not found
-        return randint(0, 20000)
 
 def create_rows():
     """ Create the data for the csv file """
 
     # Call data provider (file or endpoint) switch as needed
-    json_data = call_file()
+    json_data = api.call_file()
 
     articles = json_data['data']
 
@@ -79,7 +37,7 @@ def create_rows():
             failure = True
 
         if failure is False:
-            score = get_reach_score(article['article_uuid'])
+            score = database.get_reach_score(article['article_uuid'])
             rows.append([article['article_uuid'], score, sentence_embedding.numpy()])
 
     return rows
@@ -108,5 +66,4 @@ def create_csv():
 
 if __name__ == '__main__':
     create_csv()
-    cur.close()
-    conn.close()
+    database.disconnect()
