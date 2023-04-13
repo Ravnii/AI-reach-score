@@ -11,58 +11,69 @@ model = load_bert_base_model()
 def create_rows():
     """ Create the data for the csv file """
 
-    # Call data provider (file or endpoint) switch as needed
-    json_data = api.call_file()
+    json_data = api.fetch()
+
+    next_page = json_data['metadata']['next']
 
     articles = json_data['data']
 
     rows = []
 
-    print("Creating article data...")
-    # Loop through all articles in data set
-    for article in tqdm(articles):
-        text = ''
-        failure = False
+    while True:
 
-        # Loop through the article content and create a text string
-        for content in article['content']:
-            if "text" in content['data']:
-                text += ' ' + strip_tags(content['data']['text'])
+        print("Creating article data...")
+        # Loop through all articles in data set
+        for article in tqdm(articles):
+            text = ''
+            failure = False
 
-        # List articles fails embedding
-        try:
-            article_text = article['headline'] + ' ' + article['lead'] + ' ' + text
-            token_embeddings, sentence_embedding, tokenized_text = model.embed_text(article_text)
-        except:
-            failure = True
+            # Loop through the article content and create a text string
+            for content in article['content']:
+                if "text" in content['data']:
+                    text += ' ' + strip_tags(content['data']['text'])
 
-        if failure is False:
-            score = database.get_reach_score(article['article_uuid'])
-            rows.append([article['article_uuid'], score, sentence_embedding.numpy()])
+            # List articles fails embedding
+            try:
+                article_text = article['headline'] + ' ' + article['lead'] + ' ' + text
+                token_embeddings, sentence_embedding, tokenized_text = model.embed_text(article_text)
+            except:
+                failure = True
+
+            if failure is False:
+                reach_scores = database.get_reach_score(article['article_uuid'])
+                for tuple in reach_scores:
+                    score = tuple[0]
+                    hostname = tuple[1]
+                    rows.append([article['article_uuid'], score, hostname, sentence_embedding.numpy()])
+
+        if not next_page:
+            break
+
+        json_data = api.fetch(next_page)
+
+        next_page = json_data['metadata']['next']
+
+        articles = json_data['data']
 
     return rows
 
 def create_csv():
     """ Create csv file by merging with the old one and remove duplicates """
 
-    columns = ['article_uuid', 'score', 'embedding']
+    columns = ['article_uuid', 'score', 'hostname', 'embedding']
 
-    rows = create_rows()
+    data = create_rows()
 
-    df = pd.DataFrame(data=rows, columns=columns)
+    df = pd.DataFrame(data=data, columns=columns)
 
     df.set_index('article_uuid', drop=True, inplace=True)
 
-    old_df = pd.read_csv('articles.csv', index_col='article_uuid')
-
-    new_df = pd.concat([df, old_df])
-
-    new_df = new_df[~new_df.index.duplicated(keep='last')]
-
     print("Saving new data to csv")
-    new_df.to_csv('articles.csv')
+    df.to_csv('articles.csv', header=False, mode='a', index_label='article_uuid')
 
-    print(pd.read_csv('articles.csv'))
+    new_df = pd.read_csv('articles.csv', index_col='article_uuid')
+
+    print(new_df)
 
 if __name__ == '__main__':
     create_csv()

@@ -1,13 +1,18 @@
 import json
+import datetime
 from config import config
 from urllib.request import urlopen
 
-def call_api():
+def fetch(next_page = ""):
     """ Get article data from api endpoint """
 
     # Get url from config file
-    param = config("api.ini", "articles")
-    url = param['url']
+    params = config("api.ini", "articles")
+
+    if not next_page:
+        url = params['url'] + '?modified_since=' + get_timestamp(True) + '&modified_until=' + get_timestamp(False)
+    else:
+        url = params['domain'] + next_page
 
     # Connect to API end point
     print("Fetching data from API endpoint...")
@@ -15,10 +20,14 @@ def call_api():
 
     return json.loads(response.read())
 
-def call_file():
-    """ Get article data from file """
+def get_timestamp(since):
+    now = datetime.datetime.now()
 
-    # Open and read the data from file
-    print("Fetching data from file...")
-    with open('./articles.json') as f:
-        return json.loads(f.read())
+    delta = now - datetime.timedelta(days=1, hours=now.hour, minutes=now.minute, seconds=now.second)
+
+    ts = datetime.datetime.timestamp(delta)
+
+    if since:
+        return str(int(ts))
+    else:
+        return str(int(ts) + 86400)

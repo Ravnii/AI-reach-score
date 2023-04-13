@@ -22,16 +22,15 @@ def get_reach_score(article_uuid):
 
     try:
         # Fetch from database
-        cur.execute("SELECT reach_score FROM rolling_30_days_news WHERE article_uuid = '" + article_uuid + "'")
-        row = cur.fetchone()
+        cur.execute("SELECT reach_score, hostname FROM rolling_30_days_news WHERE article_id = '" + article_uuid + "'")
+        row = cur.fetchall()
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
 
     if row is not None:
-        return row[0]
+        return row
     else:
-        # Return random score if not found
-        return randint(0, 20000)
+        return []
 
 conn = connect()
 cur = conn.cursor()
