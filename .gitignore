@@ -1,4 +1,5 @@
 api.ini
 database.ini
+articles.csv
 articles.json
 /__pycache__
